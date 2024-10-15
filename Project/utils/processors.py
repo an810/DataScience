@@ -1,65 +1,11 @@
 from typing import override
-
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from datetime import date, datetime, timedelta
 from time import sleep
-
-from utils.send_requests import send_request
+from Project.utils.send_requests import send_request
 
 USD_TO_VND = 24000
-
-
-#################################################
-
-
-class PageProcessor():
-    """
-    Processor class for job listing pages.
-    """
-
-    def generate_page_urls(self,
-                           url: str,
-                           recursive: bool = False
-                           ):
-        """
-        Generate job detail page URLs to JobProcessor and its derived classes.
-
-        Arguments:
-            url [str]: Processed URL.
-            recursive [bool]: Enable processing pages recursively.
-
-        Yields:
-            job_url [str]: URL for job detail pages.
-
-        Usage:
-            detail_url_gen = PageProcessor().get_job_detail_urls(
-                <job_listing_url>,
-                ...
-            )
-            for job_url in detail_url_gen:
-                do something
-        """
-        # Send requests and parse job details page and gather job data
-        print("Scraping job URLs at", url)
-        response = send_request("get", url)
-        soup = BeautifulSoup(response.content, "html.parser")
-        jobs_in_page = soup.find_all("div", "job-item-2")
-        for job in jobs_in_page:
-            job_url = job.find("a", target="_blank")["href"]
-            yield job_url
-
-        # Process next page if found
-        next_page_url = soup.find("a", rel="next")["href"]
-        if next_page_url and recursive:
-            print("Page finished. Moving on to next page.")
-            for job_url in self.generate_page_urls(next_page_url, recursive):
-                yield job_url
-        print("Page finished. Crawl ended.")
-
-
-#################################################
-
 
 class JobProcessor():
     """
@@ -175,7 +121,11 @@ class _NormalJobProcessor(JobProcessor):
         xp_tag = detail_tags[2]
         city_tag = detail_tags[1]
         due_tag = soup.find("div", class_="job-detail__info--deadline")
-        jd_tag = soup.find("div", class_="job-description__item--content")
+        jd_tags = soup.find_all("div", class_="job-description__item--content") # [jd_tag, req_tag, benefits_tag]
+        jd_tag = jd_tags[0]
+        req_tag = jd_tags[1]
+        benefits_tag = jd_tags[2]
+        worktime_tag = jd_tag[3]
 
         # Process field values
         job_id = int(url.split("/")[-1].split(".")[0])
@@ -188,6 +138,9 @@ class _NormalJobProcessor(JobProcessor):
                                                                                                          "/").split("/")
         due_date = f"{year}/{month}/{day}"  # due_tag.text.split(":")[1].strip()[::-1].replace("-", "/") # datetime.strptime(date_str, "%d/%m/%Y")
         jd = jd_tag.text.strip("\n")
+        req = req_tag.text.strip("\n")
+        benefits = benefits_tag.text.strip("\n")
+        worktime = worktime_tag.text.strip("\n")
 
         return {
             "job_id": job_id,
@@ -199,7 +152,10 @@ class _NormalJobProcessor(JobProcessor):
             "yrs_of_exp_max": yrs_of_exp_max,
             "job_city": job_city,
             "due_date": due_date,
-            "jd": jd
+            "job_details": jd,
+            "job_requirements": req,
+            "job_benefits": benefits,
+            "worktime": worktime
         }
 
 
@@ -243,7 +199,12 @@ class _BrandJobProcessor(JobProcessor):
             .find("div", class_="box-address") \
             .find("div")  # Type 1 syntax
         due_tag = soup.find("span", class_="deadline").find("strong")
-        jd_tag = box_infos[1].find("div", class_="content-tab")
+        jd_tags = box_infos[1].find_all("div", class_="content-tab")
+        jd_tag = jd_tags[0]
+        req_tag = jd_tags[1]
+        benefits_tag = jd_tags[2]
+        worktime_tag = jd_tags[3]
+
 
         # Get job detail values
         job_id = int(url.split("/")[-1].split(".")[0].split("-")[-1][1:])
@@ -255,6 +216,9 @@ class _BrandJobProcessor(JobProcessor):
         days_remaining = int(due_tag.text)
         due_date = (date.today() + timedelta(days=days_remaining))
         jd = jd_tag.text.strip("\n")
+        req = req_tag.text.strip("\n")
+        benefits = benefits_tag.text.strip("\n")
+        worktime = worktime_tag.text.strip("\n")
 
         return {
             "job_id": job_id,
@@ -266,7 +230,10 @@ class _BrandJobProcessor(JobProcessor):
             "yrs_of_exp_max": yrs_of_exp_max,
             "job_city": job_city,
             "due_date": due_date,
-            "jd": jd
+            "job_details": jd,
+            "job_requirements": req,
+            "job_benefits": benefits,
+            "worktime": worktime
         }
 
     def _process_job_premium(self, soup: BeautifulSoup, url: str):
@@ -282,7 +249,11 @@ class _BrandJobProcessor(JobProcessor):
         xp_tag = detail_tags[-1]
         city_tag = detail_tags[1]
         due_tag = soup.find_all("div", class_="general-information-data__value")[-1]
-        jd_tag = soup.find("div", class_="premium-job-description__box--content")
+        jd_tags = soup.find_all("div", class_="premium-job-description__box--content")
+        jd_tag = jd_tags[0]
+        req_tag = jd_tags[1]
+        benefits_tag = jd_tags[2]
+        worktime_tag = jd_tags[3]
 
         # Get job detail values
         job_id = int(url.split("/")[-1].split(".")[0].split("-")[-1][1:])
@@ -294,6 +265,9 @@ class _BrandJobProcessor(JobProcessor):
         date_str = due_tag.text.split(" ")[-1].strip("\n")
         due_date = datetime.strptime(date_str, "%d/%m/%Y")
         jd = jd_tag.text.strip("\n")
+        req = req_tag.text.strip("\n")
+        benefits = benefits_tag.text.strip("\n")
+        worktime = worktime_tag.text.strip("\n")
 
         return {
             "job_id": job_id,
@@ -305,5 +279,8 @@ class _BrandJobProcessor(JobProcessor):
             "yrs_of_exp_max": yrs_of_exp_max,
             "job_city": job_city,
             "due_date": due_date,
-            "jd": jd
+            "job_details": jd,
+            "job_requirements": req,
+            "job_benefits": benefits,
+            "worktime": worktime
         }

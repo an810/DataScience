@@ -1,10 +1,8 @@
-import time
 import concurrent.futures
-from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
 import csv
-import scrapeBatdongsan
+
+from Project.utils.processors import JobProcessor
 
 def clear_file(file_path):
     with open(file_path, 'w', encoding='utf-8') as file:
@@ -12,8 +10,8 @@ def clear_file(file_path):
 
 def write_to_file(data, links, data_file, links_file):
     clear_file(data_file)
-    with open(data_file, 'a', newline='', encoding='utf-8') as tsvfile:
-        writer = csv.writer(tsvfile, delimiter='\t')
+    with open(data_file, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
 
         writer.writerow(data.keys())
 
@@ -32,31 +30,30 @@ def write_to_file(data, links, data_file, links_file):
     print(f"Links have been written to {links_file}")
 
 def scrape_data():
-    links_file_path = "../data/batdongsan.com.vn_links.txt"
-    data_file_path = "../data/batdongsan.com.vn_data.tsv"
+    links_file_path = "../data/topcv.vn_links.txt"
+    data_file_path = "../data/topcv.vn_data.csv"
     with open(links_file_path, 'r', encoding='utf-8') as links_file:
         links = links_file.read().splitlines()
 
     # Đọc dữ liệu hiện có từ tệp
     data = {
-        "Tên": [],
-        "Diện tích": [],
-        "Mặt tiền": [],
-        "Mức giá": [],
-        "Hướng nhà": [],
-        "Số phòng ngủ": [],
-        "Số toilet": [],
-        "Nội thất": [],
-        "Pháp lý": [],
-        "lat": [],
-        "lon": [],
-        "Địa chỉ": [],
-        "Quận": [],
-        "Thành phố": []
+        "Job ID": [],
+        "Job Title": [],
+        "Company": [],
+        "Salary min": [],
+        "Salary max": [],
+        "Years of experience min": [],
+        "Years of experience max": [],
+        "Location": [],
+        "Due date": [],
+        "Job Details": [],
+        "Requirements": [],
+        "Benefits": [],
+        "Working Time": [],
     }
 
-    with open(data_file_path, 'r', newline='', encoding='utf-8') as tsvfile:
-        reader = csv.DictReader(tsvfile, delimiter='\t')
+    with open(data_file_path, 'r', newline='', encoding='utf-8') as csvfile:
+        reader = csv.DictReader(csvfile, delimiter=',')
         for row in reader:
             for key, value in row.items():
                 if key not in data:
@@ -69,11 +66,13 @@ def scrape_data():
 
     successful_links = set()
 
+    job_processor = JobProcessor()
+
     def process_link(link):
         url = link
         successful_links.add(url)
         print(f"Scraping link {len(successful_links) + 1}: {url}")
-        scraped_data = scrapeBatdongsan.scrape_data(url)
+        scraped_data = job_processor.process_job(url, pause_between_jobs=5)
         if scraped_data:
             for key, value in scraped_data.items():
                 if key in data:
