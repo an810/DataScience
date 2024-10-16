@@ -10,14 +10,16 @@ def clear_file(file_path):
 
 def write_to_file(data, links, data_file, links_file):
     clear_file(data_file)
-    with open(data_file, 'a', newline='', encoding='utf-8') as csvfile:
-        writer = csv.writer(csvfile, delimiter=',')
+    print("Writing data to file")
+    with open(data_file, mode='w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
 
         writer.writerow(data.keys())
 
         # Viết các dòng mới vào file
-        for i in range(len(data["Tên"])):
+        for i in range(len(data["Job ID"])):
             row_data = [data[key][i] for key in data.keys()]
+            print(row_data)
             writer.writerow(row_data)
 
     print(f"Data has been written to {data_file}")
@@ -30,7 +32,7 @@ def write_to_file(data, links, data_file, links_file):
     print(f"Links have been written to {links_file}")
 
 def scrape_data():
-    links_file_path = "../data/topcv.vn_links.txt"
+    links_file_path = "../data/links.txt"
     data_file_path = "../data/topcv.vn_data.csv"
     with open(links_file_path, 'r', encoding='utf-8') as links_file:
         links = links_file.read().splitlines()
@@ -72,13 +74,14 @@ def scrape_data():
         url = link
         successful_links.add(url)
         print(f"Scraping link {len(successful_links) + 1}: {url}")
-        scraped_data = job_processor.process_job(url, pause_between_jobs=5)
+        scraped_data = job_processor.process_job(url, pause_between_jobs=3)
+        print(scraped_data)
         if scraped_data:
             for key, value in scraped_data.items():
                 if key in data:
                     data[key].append(value)
 
-        if len(successful_links) % 100 == 0:
+        if len(successful_links) % 1000 == 0:
             unscraped_links = [link for link in links if link not in successful_links]
             write_to_file(data, unscraped_links, data_file_path, links_file_path)
 
