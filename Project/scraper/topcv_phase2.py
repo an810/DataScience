@@ -17,19 +17,19 @@ def write_to_file(data, links, data_file, links_file):
         writer.writerow(data.keys())
 
         # Viết các dòng mới vào file
-        for i in range(len(data["Job ID"])):
+        for i in range(len(data["job_id"])):
             row_data = [data[key][i] for key in data.keys()]
-            print(row_data)
+            # print(row_data)
             writer.writerow(row_data)
 
     print(f"Data has been written to {data_file}")
 
-    clear_file(links_file)
-    with open(links_file, 'a', encoding='utf-8') as linksfile:
-        for link in links:
-            linksfile.write(link + '\n')
+    # clear_file(links_file)
+    # with open(links_file, 'a', encoding='utf-8') as linksfile:
+    #     for link in links:
+    #         linksfile.write(link + '\n')
 
-    print(f"Links have been written to {links_file}")
+    # print(f"Links have been written to {links_file}")
 
 def scrape_data():
     links_file_path = "../data/links.txt"
@@ -39,19 +39,20 @@ def scrape_data():
 
     # Đọc dữ liệu hiện có từ tệp
     data = {
-        "Job ID": [],
-        "Job Title": [],
-        "Company": [],
-        "Salary min": [],
-        "Salary max": [],
-        "Years of experience min": [],
-        "Years of experience max": [],
-        "Location": [],
-        "Due date": [],
-        "Job Details": [],
-        "Requirements": [],
-        "Benefits": [],
-        "Working Time": [],
+        "job_id": [],
+        "job_title": [],
+        "company": [],
+        "salary_min": [],
+        "salary_max": [],
+        "yrs_of_exp_min": [],
+        "yrs_of_exp_max": [],
+        "job_city": [],
+        "due_date": [],
+        "job_details": [],
+        "job_requirements": [],
+        "job_benefits": [],
+        "location": [],
+        "worktime": [],
     }
 
     with open(data_file_path, 'r', newline='', encoding='utf-8') as csvfile:
@@ -73,19 +74,20 @@ def scrape_data():
     def process_link(link):
         url = link
         successful_links.add(url)
-        print(f"Scraping link {len(successful_links) + 1}: {url}")
+        print(f"Scraping link {len(successful_links)}: {url}")
         scraped_data = job_processor.process_job(url, pause_between_jobs=3)
-        print(scraped_data)
+        # print(scraped_data)
         if scraped_data:
             for key, value in scraped_data.items():
                 if key in data:
                     data[key].append(value)
 
-        if len(successful_links) % 1000 == 0:
+        # if len(successful_links) % 1000 == 0:
+        if True:
             unscraped_links = [link for link in links if link not in successful_links]
             write_to_file(data, unscraped_links, data_file_path, links_file_path)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(process_link, link) for link in links]
     concurrent.futures.wait(futures)
 

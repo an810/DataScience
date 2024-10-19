@@ -1,4 +1,4 @@
-from typing import override
+# from typing import override
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from datetime import date, datetime, timedelta
@@ -105,7 +105,7 @@ class _NormalJobProcessor(JobProcessor):
     Used for processing job detail pages with ./viec-lam/... subdirectories
     """
 
-    @override
+    # @override
     def process_job(self, url: str):
         # Send request, instantiate BS object and define necessary tags
         response = send_request("get", url)
@@ -125,7 +125,11 @@ class _NormalJobProcessor(JobProcessor):
         jd_tag = jd_tags[0]
         req_tag = jd_tags[1]
         benefits_tag = jd_tags[2]
-        worktime_tag = jd_tag[3]
+        location_tag = jd_tags[3]
+        if(len(jd_tags) == 6):
+            worktime_tag = jd_tags[4]
+        else:
+            worktime_tag = None
 
         # Process field values
         job_id = int(url.split("/")[-1].split(".")[0])
@@ -140,7 +144,11 @@ class _NormalJobProcessor(JobProcessor):
         jd = jd_tag.text.strip("\n")
         req = req_tag.text.strip("\n")
         benefits = benefits_tag.text.strip("\n")
-        worktime = worktime_tag.text.strip("\n")
+        location = location_tag.text.strip("\n")
+        if(worktime_tag):
+            worktime = worktime_tag.text.strip("\n")
+        else:
+            worktime = None
 
         return {
             "job_id": job_id,
@@ -155,6 +163,7 @@ class _NormalJobProcessor(JobProcessor):
             "job_details": jd,
             "job_requirements": req,
             "job_benefits": benefits,
+            "location": location,
             "worktime": worktime
         }
 
@@ -169,7 +178,7 @@ class _BrandJobProcessor(JobProcessor):
     recognize template based on some tags and parse data based on it.
     """
 
-    @override
+    # @override
     def process_job(self, url: str):
         # Send request, instantiate BS object
         response = send_request("get", url)
@@ -203,8 +212,11 @@ class _BrandJobProcessor(JobProcessor):
         jd_tag = jd_tags[0]
         req_tag = jd_tags[1]
         benefits_tag = jd_tags[2]
-        worktime_tag = jd_tags[3]
-
+        location_tag = jd_tags[3]
+        if(len(jd_tags) == 6):
+            worktime_tag = jd_tags[4]
+        else:
+            worktime_tag = None
 
         # Get job detail values
         job_id = int(url.split("/")[-1].split(".")[0].split("-")[-1][1:])
@@ -218,7 +230,11 @@ class _BrandJobProcessor(JobProcessor):
         jd = jd_tag.text.strip("\n")
         req = req_tag.text.strip("\n")
         benefits = benefits_tag.text.strip("\n")
-        worktime = worktime_tag.text.strip("\n")
+        location = location_tag.text.strip("\n")
+        if(worktime_tag):
+            worktime = worktime_tag.text.strip("\n")
+        else:
+            worktime = None
 
         return {
             "job_id": job_id,
@@ -233,6 +249,7 @@ class _BrandJobProcessor(JobProcessor):
             "job_details": jd,
             "job_requirements": req,
             "job_benefits": benefits,
+            "location": location,
             "worktime": worktime
         }
 
@@ -253,7 +270,11 @@ class _BrandJobProcessor(JobProcessor):
         jd_tag = jd_tags[0]
         req_tag = jd_tags[1]
         benefits_tag = jd_tags[2]
-        worktime_tag = jd_tags[3]
+        location_tag = jd_tags[3]
+        if(len(jd_tags) == 6):
+            worktime_tag = detail_tags[4]
+        else:
+            worktime_tag = None
 
         # Get job detail values
         job_id = int(url.split("/")[-1].split(".")[0].split("-")[-1][1:])
@@ -267,7 +288,11 @@ class _BrandJobProcessor(JobProcessor):
         jd = jd_tag.text.strip("\n")
         req = req_tag.text.strip("\n")
         benefits = benefits_tag.text.strip("\n")
-        worktime = worktime_tag.text.strip("\n")
+        location = location_tag.text.strip("\n")
+        if(worktime_tag):
+            worktime = worktime_tag.text.strip("\n")
+        else:
+            worktime = None
 
         return {
             "job_id": job_id,
@@ -282,5 +307,6 @@ class _BrandJobProcessor(JobProcessor):
             "job_details": jd,
             "job_requirements": req,
             "job_benefits": benefits,
+            "location": location,
             "worktime": worktime
         }
