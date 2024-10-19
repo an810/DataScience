@@ -7,7 +7,7 @@ def clear_file(file_path):
         file.truncate(0)  # Xóa toàn bộ nội dung của tệp
 
 def scrape_links():
-    output_file = "../data/links.txt"
+    output_file = "../data/topcv.vn_links.txt"
     unscraped_links = set()
     with open(output_file, 'r', encoding='utf-8') as existing_links_file:
         existing_links = existing_links_file.read().splitlines()
@@ -36,7 +36,7 @@ def scrape_links():
             unscraped_links.add(job_link)
 
 
-        if page_index % 10 == 0:
+        if page_index % 1 == 0:
             clear_file(output_file)
             with open(output_file, 'a', encoding='utf-8') as linksfile:
                 for link in unscraped_links:
