@@ -32,8 +32,8 @@ def write_to_file(data, links, data_file, links_file):
     # print(f"Links have been written to {links_file}")
 
 def scrape_data():
-    links_file_path = "../data/links.txt"
-    data_file_path = "../data/topcv.vn_data.csv"
+    links_file_path = "../data/careerviet_links.txt"
+    data_file_path = "../data/careerviet_data.csv"
     with open(links_file_path, 'r', encoding='utf-8') as links_file:
         links = links_file.read().splitlines()
 
@@ -52,7 +52,7 @@ def scrape_data():
         "job_requirements": [],
         "job_benefits": [],
         "location": [],
-        "worktime": [],
+        "other_info": []
     }
 
     with open(data_file_path, 'r', newline='', encoding='utf-8') as csvfile:
@@ -82,7 +82,6 @@ def scrape_data():
                 if key in data:
                     data[key].append(value)
 
-        # if len(successful_links) % 1000 == 0:
         if True:
             unscraped_links = [link for link in links if link not in successful_links]
             write_to_file(data, unscraped_links, data_file_path, links_file_path)
@@ -93,7 +92,7 @@ def scrape_data():
 
     links = [link for link in links if link not in successful_links]
     write_to_file(data, links, data_file_path, links_file_path)
-
+    print(len(successful_links))
     print(f"All data has been written")
 
 if __name__ == "__main__":

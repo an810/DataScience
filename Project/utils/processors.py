@@ -1,77 +1,109 @@
-# from typing import override
 from bs4 import BeautifulSoup
 from bs4.element import Tag
-from datetime import date, datetime, timedelta
-from time import sleep
+
 from Project.utils.send_requests import send_request
 
 USD_TO_VND = 24000
 
+
 class JobProcessor():
-    """
-    Base class for processors of job details page from given URL.
-    Main entrypoint for job page processing applications.
-    Can handle different site templates.
-    """
-
     def process_job(self, url: str, pause_between_jobs: int = 3):
-        """
-        Parse URL to find job detail page template based on first-level subdirectory
-
-        Arguments:
-            url [str]: URL of job detail page.
-            pause_between_jobs [int]: Seconds between each request
-                to get job detail page.
-
-        Returns:
-            job_item [dict]: Processed data.
-
-        Usage: To scrape a job detail page onto job_item:
-            job_item = Processor().process_job(<job_detail_url>)
-        """
         print("Scraping job info at", url)
 
-        # Parse URL and get keyword
-        keyword = url.strip("https://www.").split("/")[1]
-        keyword_map = {
-            "viec-lam": _NormalJobProcessor(),
-            "brand": _BrandJobProcessor()
+        response = send_request("get", url)
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        # job_id, job_title, company
+        job_id = self._process_job_id(url)
+        title_tag = soup.find("div", class_="apply-now-content")
+        job_title = title_tag.find("h1", class_="title").text.strip("\n")
+        company_tag = title_tag.find("a", class_="job-company-name")
+        if company_tag:
+            company = company_tag.text.strip("\n")
+        else:
+            company = "Unknown"
+
+        # salary, yrs_of_exp, job_city, due_date
+        detail_tags = soup.find_all("div", class_="detail-box")
+        job_city_tag = detail_tags[0].find("a")
+        job_city = job_city_tag.text.strip("\n")
+
+        detail_box_tags = detail_tags[2].find_all("li")
+        salary_tag = detail_box_tags[0].find("p")
+        salary_min, salary_max = self._process_salary(salary_tag)
+        if len(detail_box_tags) == 4:
+            xp_tag = detail_box_tags[1].find("p")
+            yrs_of_exp_min, yrs_of_exp_max = self._process_xp(xp_tag)
+            due_tag = detail_box_tags[3].find("p")
+        else :
+            level_tag = detail_box_tags[1].find("p")
+            level = level_tag.text.strip("\n")
+            if level == "Mới tốt nghiệp":
+                yrs_of_exp_min, yrs_of_exp_max = 0, 0
+            else:
+                yrs_of_exp_min, yrs_of_exp_max = None, None
+            due_tag = detail_box_tags[2].find("p")
+
+        day, month, year = due_tag.text.split(":")[-1].strip("").strip("\n").strip("\n").strip().replace("-",
+                                                                                                         "/").split("/")
+        due_date = f"{year}/{month}/{day}"  # due_tag.text.split(":")[1].strip()[::-1].replace("-", "/") # datetime.strptime(date_str, "%d/%m/%Y")
+
+        # jd, req, benefits, location, other_info
+        detail_row_tags = soup.find_all("div", class_="detail-row")
+        benefit_tag = detail_row_tags[0]
+        jd_tag = detail_row_tags[1]
+        req_tag = detail_row_tags[2]
+        if len(detail_row_tags) == 6:
+            location_tag = detail_row_tags[3]
+            other_info_tag = detail_row_tags[4]
+        else:
+            location_tag = None
+            other_info_tag = detail_row_tags[3]
+
+        benefit_li_tags = benefit_tag.find_all("li")
+        # print("benefit_li_tags:", benefit_li_tags)
+        benefits = ",".join([li.text.strip() for li in benefit_li_tags])
+
+        jd = jd_tag.text.strip("\n").replace("\n", " ")
+        req = req_tag.text.strip("\n").replace("\n", " ")
+
+        if location_tag:
+            location = location_tag.text.strip().replace("\n", "").replace("\r", "").replace("\t", "")
+        else:
+            location = None
+        other_info = other_info_tag.text.strip().replace("\n", "").replace("\r", "").replace("\t", "")
+
+        return {
+            "job_id": job_id,
+            "job_title": job_title,
+            "company": company,
+            "salary_min": salary_min,
+            "salary_max": salary_max,
+            "yrs_of_exp_min": yrs_of_exp_min,
+            "yrs_of_exp_max": yrs_of_exp_max,
+            "job_city": job_city,
+            "due_date": due_date,
+            "job_details": jd,
+            "job_requirements": req,
+            "job_benefits": benefits,
+            "location": location,
+            "other_info": other_info
         }
 
-        # Instantiate suitable processor based on URL keyword
-        try:
-            processor = keyword_map[keyword]
-        except KeyError:
-            raise ValueError("Strange URL syntax detected. \
-Wrong URL input or parsing for this page has not been implemented.")
-
-        # Process job based on newly assigned processor
-        sleep(pause_between_jobs)
-        return processor.process_job(url)
-
     def _process_salary(self, salary_tag: Tag):
-        """
-        Parse salary tag into integer salary range (in million VND).
-        Detects USD and convert to million VND.
-        """
         salary_str = salary_tag.text.strip("\n").strip()
-        print(salary_str)
-
-        if salary_str == "Thoả thuận":  # Default string for no salary info
+        min, max = None, None
+        if salary_str == "Cạnh tranh":  # Default string for no salary info
             min, max = (None, None)
         else:
-            # Remove , thousand separators
-            salary_arr = list(map(lambda x: x.replace(",", ""), salary_str.split(" ")))
+            salary_arr = list(
+                filter(None, map(lambda x: x.replace(",", "").replace("Tr", "").replace("VND", "").strip(),
+                                 salary_str.split(" "))))
+            print("salary_arr:",salary_arr)
             if salary_arr[1] == "-":  # Normal range (<min> - <max> <unit>)
                 min, max = map(float, (salary_arr[0], salary_arr[2]))
-            elif salary_arr[0] == "Trên":  # Min only (Trên <min> <unit>)
+            elif salary_arr[0] == "Trên":  # Above a certain amount
                 min, max = float(salary_arr[1]), None
-            elif salary_arr[0] == "Tới":  # Max only (Tới <max> <unit>)
-                min, max = None, float(salary_arr[1])
-            # else:
-            #     min, max = None, None
-
-            # Convert USD to million VND
             if salary_arr[-1] == "USD":
                 min, max = map(
                     lambda x: int(x) * USD_TO_VND / 10 ** 6 if x != None else None,
@@ -82,231 +114,27 @@ Wrong URL input or parsing for this page has not been implemented.")
 
     def _process_xp(self, xp_tag: Tag):
         # Returns min & max required experience (years)
-        xp_str = xp_tag.text.strip("\n")
-        xp_arr = xp_str.split(" ")
-
-        if xp_str == "Không yêu cầu kinh nghiệm":
+        xp_str = xp_tag.text.strip()
+        xp_arr = list(filter(lambda x: x and x != '\r', xp_str.replace("\n", "").split(" ")))
+        print("xp_arr:", xp_arr)
+        if xp_str == "Không yêu cầu kinh nghiệm" or xp_str == "Mới tốt nghiệp":
             min, max = 0, 0
-        elif xp_arr[0].isnumeric():  # <xp> năm
+        elif xp_arr[0].isnumeric() and len(xp_arr) == 2 and xp_arr[1] == "năm":  # <xp> năm
             min, max = map(int, (xp_arr[0], xp_arr[0]))
-        elif xp_arr[1].isnumeric():  # Trên/Dưới <xp> năm
+        elif xp_arr[1] == "-" and xp_arr[2].isnumeric() and xp_arr[3] == "Năm":  # <min> - <max> Năm
+            min, max = map(int, (xp_arr[0], xp_arr[2]))
+        elif xp_arr[1].isnumeric() and xp_arr[2] == "Năm":  # Trên/Dưới <xp> năm
             if xp_arr[0] == "Trên":
                 min, max = int(xp_arr[1]), None
-            if xp_arr[0] == "Dưới":
+            elif xp_arr[0] == "Dưới":
                 min, max = None, int(xp_arr[1])
         else:
             min, max = None, None
 
         return min, max
 
-
-class _NormalJobProcessor(JobProcessor):
-    """
-    Used for processing job detail pages with ./viec-lam/... subdirectories
-    """
-
-    # @override
-    def process_job(self, url: str):
-        # Send request, instantiate BS object and define necessary tags
-        response = send_request("get", url)
-        soup = BeautifulSoup(response.content, "html.parser")
-        detail_tags = soup.find_all("div",
-                                    class_="job-detail__info--section-content-value"
-                                    )  # [salary_tag, city_tag, yrs_of_exp_tag]
-
-        title_tag = soup.find("h1", class_="job-detail__info--title")
-        company_tag = soup \
-            .find("h2", class_="company-name-label").find("a")
-        salary_tag = detail_tags[0]
-        xp_tag = detail_tags[2]
-        city_tag = detail_tags[1]
-        due_tag = soup.find("div", class_="job-detail__info--deadline")
-        jd_tags = soup.find_all("div", class_="job-description__item--content") # [jd_tag, req_tag, benefits_tag]
-        jd_tag = jd_tags[0]
-        req_tag = jd_tags[1]
-        benefits_tag = jd_tags[2]
-        location_tag = jd_tags[3]
-        if(len(jd_tags) == 6):
-            worktime_tag = jd_tags[4]
-        else:
-            worktime_tag = None
-
-        # Process field values
-        job_id = int(url.split("/")[-1].split(".")[0])
-        job_title = title_tag.text.strip("\n")
-        company = company_tag.text.strip("\n")
-        salary_min, salary_max = self._process_salary(salary_tag)
-        yrs_of_exp_min, yrs_of_exp_max = self._process_xp(xp_tag)
-        job_city = city_tag.text.strip("\n")
-        day, month, year = due_tag.text.split(":")[-1].strip("").strip("\n").strip("\n").strip().replace("-",
-                                                                                                         "/").split("/")
-        due_date = f"{year}/{month}/{day}"  # due_tag.text.split(":")[1].strip()[::-1].replace("-", "/") # datetime.strptime(date_str, "%d/%m/%Y")
-        jd = jd_tag.text.strip("\n")
-        req = req_tag.text.strip("\n")
-        benefits = benefits_tag.text.strip("\n")
-        location = location_tag.text.strip("\n")
-        if(worktime_tag):
-            worktime = worktime_tag.text.strip("\n")
-        else:
-            worktime = None
-
-        return {
-            "job_id": job_id,
-            "job_title": job_title,
-            "company": company,
-            "salary_min": salary_min,
-            "salary_max": salary_max,
-            "yrs_of_exp_min": yrs_of_exp_min,
-            "yrs_of_exp_max": yrs_of_exp_max,
-            "job_city": job_city,
-            "due_date": due_date,
-            "job_details": jd,
-            "job_requirements": req,
-            "job_benefits": benefits,
-            "location": location,
-            "worktime": worktime
-        }
-
-
-class _BrandJobProcessor(JobProcessor):
-    """
-    Used for processing job detail pages with ./brand/... subdirectories.
-    - Template for diamond companies
-    - Premium template
-
-    Note: There are multiple templates for this subdirectory. Therefore, the class
-    recognize template based on some tags and parse data based on it.
-    """
-
-    # @override
-    def process_job(self, url: str):
-        # Send request, instantiate BS object
-        response = send_request("get", url)
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        # Recognize template and select appropriate strategy
-        if soup.find("div", id="premium-job"):
-            job_item = self._process_job_premium(soup, url)
-        else:
-            job_item = self._process_job_diamond(soup, url)
-        return job_item
-
-    def _process_job_diamond(self, soup: BeautifulSoup, url: str):
-        # Define necessary tags
-        box_infos = soup.find_all("div", class_="box-info", limit=2)
-        item_tags = box_infos[0] \
-            .find("div", class_="box-main") \
-            .find_all("div", class_="box-item")
-
-        title_tag = soup \
-            .find("div", class_="box-header") \
-            .find("h2", class_="title")
-        company_tag = soup.find("div", class_="footer-info-company-name")
-        salary_tag = item_tags[0].find("span")
-        xp_tag = item_tags[-1].find("span")
-        city_tag = soup \
-            .find("div", class_="box-address") \
-            .find("div")  # Type 1 syntax
-        due_tag = soup.find("span", class_="deadline").find("strong")
-        jd_tags = box_infos[1].find_all("div", class_="content-tab")
-        jd_tag = jd_tags[0]
-        req_tag = jd_tags[1]
-        benefits_tag = jd_tags[2]
-        location_tag = jd_tags[3]
-        if(len(jd_tags) == 6):
-            worktime_tag = jd_tags[4]
-        else:
-            worktime_tag = None
-
-        # Get job detail values
-        job_id = int(url.split("/")[-1].split(".")[0].split("-")[-1][1:])
-        job_title = title_tag.text.strip("\n")
-        company = company_tag.text.strip("\n")
-        salary_min, salary_max = self._process_salary(salary_tag)
-        yrs_of_exp_min, yrs_of_exp_max = self._process_xp(xp_tag)
-        job_city = city_tag.text[2:(city_tag.text.index(":") - 1)]
-        days_remaining = int(due_tag.text)
-        due_date = (date.today() + timedelta(days=days_remaining))
-        jd = jd_tag.text.strip("\n")
-        req = req_tag.text.strip("\n")
-        benefits = benefits_tag.text.strip("\n")
-        location = location_tag.text.strip("\n")
-        if(worktime_tag):
-            worktime = worktime_tag.text.strip("\n")
-        else:
-            worktime = None
-
-        return {
-            "job_id": job_id,
-            "job_title": job_title,
-            "company": company,
-            "salary_min": salary_min,
-            "salary_max": salary_max,
-            "yrs_of_exp_min": yrs_of_exp_min,
-            "yrs_of_exp_max": yrs_of_exp_max,
-            "job_city": job_city,
-            "due_date": due_date,
-            "job_details": jd,
-            "job_requirements": req,
-            "job_benefits": benefits,
-            "location": location,
-            "worktime": worktime
-        }
-
-    def _process_job_premium(self, soup: BeautifulSoup, url: str):
-        # Define necessary tags
-        detail_tags = soup.find_all(
-            "div",
-            class_="basic-information-item__data--value"
-        )
-
-        title_tag = soup.find("h2", "premium-job-basic-information__content--title")
-        company_tag = soup.find("h1", "company-content__title--name")
-        salary_tag = detail_tags[0]
-        xp_tag = detail_tags[-1]
-        city_tag = detail_tags[1]
-        due_tag = soup.find_all("div", class_="general-information-data__value")[-1]
-        jd_tags = soup.find_all("div", class_="premium-job-description__box--content")
-        jd_tag = jd_tags[0]
-        req_tag = jd_tags[1]
-        benefits_tag = jd_tags[2]
-        location_tag = jd_tags[3]
-        if(len(jd_tags) == 6):
-            worktime_tag = detail_tags[4]
-        else:
-            worktime_tag = None
-
-        # Get job detail values
-        job_id = int(url.split("/")[-1].split(".")[0].split("-")[-1][1:])
-        job_title = title_tag.text.strip("\n")
-        company = company_tag.text.strip("\n")
-        salary_min, salary_max = self._process_salary(salary_tag)
-        yrs_of_exp_min, yrs_of_exp_max = self._process_xp(xp_tag)
-        job_city = city_tag.text.strip("\n")
-        date_str = due_tag.text.split(" ")[-1].strip("\n")
-        due_date = datetime.strptime(date_str, "%d/%m/%Y")
-        jd = jd_tag.text.strip("\n")
-        req = req_tag.text.strip("\n")
-        benefits = benefits_tag.text.strip("\n")
-        location = location_tag.text.strip("\n")
-        if(worktime_tag):
-            worktime = worktime_tag.text.strip("\n")
-        else:
-            worktime = None
-
-        return {
-            "job_id": job_id,
-            "job_title": job_title,
-            "company": company,
-            "salary_min": salary_min,
-            "salary_max": salary_max,
-            "yrs_of_exp_min": yrs_of_exp_min,
-            "yrs_of_exp_max": yrs_of_exp_max,
-            "job_city": job_city,
-            "due_date": due_date,
-            "job_details": jd,
-            "job_requirements": req,
-            "job_benefits": benefits,
-            "location": location,
-            "worktime": worktime
-        }
+    def _process_job_id(self, url: str) -> str:
+        last_part = url.split("/")[-1]
+        job_id_str = last_part.split("-")[-1]
+        job_id = job_id_str.split(".")[-2]
+        return job_id
