@@ -21,7 +21,7 @@ def scrape_links():
 
     page_index = 1
 
-    while page_index <= 10:
+    while page_index <= 14:
         url_path = base_url + str(page_index)
         driver = webdriver.Chrome(options=chrome_options)
         driver.get(url_path)
@@ -29,8 +29,13 @@ def scrape_links():
         html_content = driver.page_source
         soup = BeautifulSoup(html_content, 'html.parser')
 
-        jobs_in_page = soup.find_all("div", "sc-eBfVOF bpNIXv")
+        job_list = soup.find("div", "block-job-list")
+        jobs_in_page = []
+        for i in range(50):
+            class_name = f"search_list view_job_item item-{i} new-job-card"
+            jobs_in_page.extend(job_list.find_all("div", class_=class_name))
 
+        print(f"Found {len(jobs_in_page)} jobs in page {page_index}")
         for job in jobs_in_page:
             job_link = job.find("a", target="_blank")["href"]
             unscraped_links.add(job_link)
@@ -48,9 +53,12 @@ def scrape_links():
     clear_file(output_file)
     with open(output_file, 'w', encoding='utf-8') as linksfile:
         for link in unscraped_links:
+            link = "https://www.vietnamworks.com" + link
+            print(link)
             linksfile.write(link + '\n')
 
     print(f"Links have been written to {output_file}")
 
 if __name__ == "__main__":
+    clear_file("../data/vietnamworks_links.txt")
     scrape_links()
